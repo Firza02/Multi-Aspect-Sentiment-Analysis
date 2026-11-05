@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentiment Analysis — myBCA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-cloud/1.2.7/d3.layout.cloud.min.js"></script>
+</head>
+<body>
+
+<!-- ══ NAVBAR ══ -->
+<nav class="navbar">
+    <div class="navbar-brand">
+        <div class="nav-logo-box">
+            <div class="logo-shine"></div>
+            <img src="{{ url_for('static', filename='logomybca.png') }}" alt="myBCA" class="nav-logo-img">
+        </div>
+        <div class="nav-divider"></div>
+        <div class="nav-titles">
+            <span class="nav-title">Dashboard Analisis Sentimen</span>
+            <span class="nav-subtitle">myBCA · Multi-Aspek</span>
+        </div>
+    </div>
+    <div class="navbar-right">
+        <div class="nav-pill">
+            <span class="nav-pill-dot"></span>
+            myBCA Reviews
+        </div>
+        <span class="nav-ver">v2.0</span>
+    </div>
+</nav>
+
+<!-- ══ PAGE ══ -->
+<div class="page">
+
+    <!-- ── INPUT CARD ── -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-icon ci-blue">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <span class="card-title">Input Ulasan</span>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" id="tabText" onclick="switchMode('text')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Teks
+            </button>
+            <button class="tab" id="tabFile" onclick="switchMode('file')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+                File
+            </button>
+        </div>
+
+        <!-- Mode Teks -->
+        <div id="textMode">
+            <textarea id="inputText" placeholder="Masukkan ulasan pengguna myBCA di sini..."></textarea>
+            <div class="actions">
+                <button class="btn-primary" id="btnText" onclick="analyzeText()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    Analisis Teks
+                </button>
+            </div>
+        </div>
+
+        <!-- Mode File -->
+        <div id="fileMode" style="display:none;">
+            <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
+                <div class="drop-icon">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </div>
+                <div class="drop-title">Klik atau seret file ke sini</div>
+                <div class="drop-sub">Mendukung <code>.csv</code> &middot; <code>.xlsx</code> &middot; <code>.xls</code> &mdash; Kolom <code>'ulasan'</code> atau kolom pertama</div>
+                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none" onchange="updateFileName(this)">
+                <div id="fileName" class="drop-filename"></div>
+            </div>
+            <div class="actions" style="margin-top:14px;">
+                <button class="btn-primary" id="btnFile" onclick="analyzeFile()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>
+                    Analisis File
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── STAT ROW ── -->
+    <div id="statRow" class="stat-row" style="display:none;"></div>
+
+    <!-- ── GLOBAL FILTER ASPEK ── -->
+    <div id="filterCard" class="card filter-card" style="display:none;">
+        <div class="filter-label">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46"/></svg>
+            Filter Aspek
+        </div>
+        <div class="global-filters">
+            <button class="aspek-filter-btn active" data-aspek="semua" onclick="applyFilter(this,'semua')">
+                Semua Aspek
+            </button>
+            <button class="aspek-filter-btn" data-aspek="Effectiveness"  onclick="applyFilter(this,'Effectiveness')">Effectiveness</button>
+            <button class="aspek-filter-btn" data-aspek="Efficiency"     onclick="applyFilter(this,'Efficiency')">Efficiency</button>
+            <button class="aspek-filter-btn" data-aspek="Learnability"   onclick="applyFilter(this,'Learnability')">Learnability</button>
+            <button class="aspek-filter-btn" data-aspek="Errors"         onclick="applyFilter(this,'Errors')">Errors</button>
+            <button class="aspek-filter-btn" data-aspek="Satisfaction"   onclick="applyFilter(this,'Satisfaction')">Satisfaction</button>
+            <button class="aspek-filter-btn" data-aspek="Cognitive Load" onclick="applyFilter(this,'Cognitive Load')">Cognitive Load</button>
+        </div>
+    </div>
+
+    <!-- ── VISUAL SECTION ── -->
+    <div id="visualSection" class="visual-section" style="display:none;">
+
+        <!-- Chart card -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-icon ci-teal">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                </div>
+                <span class="card-title">Distribusi per Aspek</span>
+                <span class="card-sub" id="chartSubLabel">keseluruhan</span>
+            </div>
+            <div class="charts-grid">
+                <div class="chart-box"><canvas id="barChart"></canvas></div>
+                <div class="chart-box chart-box--sm"><canvas id="pieChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Wordcloud dual card -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-icon ci-blue">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <span class="card-title">Awan Kata</span>
+                <span class="card-sub" id="wcSubLabel">semua aspek</span>
+            </div>
+
+            <div class="wc-dual">
+                <!-- Positif -->
+                <div class="wc-col">
+                    <div class="wc-col-header wc-header-pos">
+                        <span class="wc-dot dot-pos"></span>
+                        <span class="wc-col-title">Positif</span>
+                        <span class="wc-col-count" id="wc-pos-count"></span>
+                    </div>
+                    <div id="wc-pos" class="wc-wrap">
+                        <div id="wc-pos-loading" class="wc-loading">Memproses kata-kata...</div>
+                    </div>
+                </div>
+                <!-- Negatif -->
+                <div class="wc-col">
+                    <div class="wc-col-header wc-header-neg">
+                        <span class="wc-dot dot-neg"></span>
+                        <span class="wc-col-title">Negatif</span>
+                        <span class="wc-col-count" id="wc-neg-count"></span>
+                    </div>
+                    <div id="wc-neg" class="wc-wrap">
+                        <div id="wc-neg-loading" class="wc-loading">Memproses kata-kata...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /visualSection -->
+
+    <!-- ── TABLE CARD ── -->
+    <div id="resultsCard" class="card" style="display:none;">
+        <div class="card-header">
+            <div class="card-icon ci-blue">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            </div>
+            <span class="card-title">Rincian Data</span>
+            <span id="rowCount" class="card-sub"></span>
+            <button class="btn-dl" style="margin-left:auto;" onclick="downloadExcel()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Unduh .xlsx
+            </button>
+        </div>
+        <div class="tbl-wrap">
+            <table class="tbl">
+                <thead id="tableHead"></thead>
+                <tbody id="resultBody"></tbody>
+            </table>
+        </div>
+        <div id="pagination" class="pager" style="display:none;">
+            <button class="btn-page" id="prevPage" onclick="changePage(-1)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15,18 9,12 15,6"/></svg>
+                Sebelumnya
+            </button>
+            <span id="pageInfo" class="page-info">1 / 1</span>
+            <button class="btn-page" id="nextPage" onclick="changePage(1)">
+                Berikutnya
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9,18 15,12 9,6"/></svg>
+            </button>
+        </div>
+    </div>
+
+</div><!-- /page -->
+
+<script>
+/* ═══════════════════════════════════════
+   STATE
+═══════════════════════════════════════ */
+var allData      = [];
+var currentPage  = 1;
+var rowsPerPage  = 10;
+var myBar        = null;
+var myPie        = null;
+var currentAspek = 'semua';
+
+var ASPEK = ["Effectiveness","Efficiency","Learnability","Errors","Satisfaction","Cognitive Load"];
+
+var STOPS = {
+    "yang":1,"di":1,"dan":1,"itu":1,"ini":1,"untuk":1,"ada":1,"adalah":1,
+    "akan":1,"dari":1,"bisa":1,"saya":1,"kami":1,"aplikasi":1,"bca":1,
+    "mybca":1,"aja":1,"sudah":1,"udah":1,"tidak":1,"dengan":1,"ke":1,
+    "ya":1,"jadi":1,"kalau":1,"banget":1,"tapi":1,"atau":1,"kalo":1,
+    "ga":1,"gak":1,"ngga":1,"nggak":1,"juga":1,"sih":1,"deh":1,"lah":1,
+    "nya":1,"nih":1,"dong":1,"lagi":1,"lebih":1,"sangat":1,"app":1,
+    "the":1,"in":1,"is":1,"mau":1,"buat":1
+};
+
+function $(id){ return document.getElementById(id); }
+
+/* ═══════════════════════════════════════
+   UI HELPERS
+═══════════════════════════════════════ */
+function smoothScroll(id){
+    var el = $(id);
+    if(el){ setTimeout(function(){ el.scrollIntoView({behavior:'smooth',block:'start'}); }, 100); }
+}
+
+function updateFileName(input){
+    $('fileName').textContent = input.files[0] ? '📄 ' + input.files[0].name : '';
+}
+
+function switchMode(m){
+    $('textMode').style.display = (m === 'text') ? 'block' : 'none';
+    $('fileMode').style.display = (m === 'file') ? 'block' : 'none';
+    $('tabText').className = 'tab' + (m === 'text' ? ' active' : '');
+    $('tabFile').className = 'tab' + (m === 'file' ? ' active' : '');
+    $('resultsCard').style.display   = 'none';
+    $('visualSection').style.display = 'none';
+    $('statRow').style.display       = 'none';
+    $('filterCard').style.display    = 'none';
+}
+
+function badge(v){
+    var map = { 'Positif':'pos', 'Negatif':'neg' };
+    var cls = map[v] || 'na';
+    return '<span class="bdg bdg-' + cls + '">' + (v || 'N/A') + '</span>';
+}
+
+function setBtn(id, loading, html){
+    var b = $(id);
+    b.disabled = loading;
+    b.innerHTML = loading
+        ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Memproses...'
+        : html;
+}
+
+var BTN_TEXT_HTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Analisis Teks';
+var BTN_FILE_HTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg> Analisis File';
+
+/* ═══════════════════════════════════════
+   ANALYZE TEXT
+═══════════════════════════════════════ */
+function analyzeText(){
+    var t = $('inputText').value.trim();
+    if(!t){ alert("Masukkan teks terlebih dahulu!"); return; }
+
+    setBtn('btnText', true, '');
+    $('resultsCard').style.display = 'block';
+    $('pagination').style.display  = 'none';
+    $('tableHead').innerHTML = '<tr><th>Aspek</th><th>Sentimen</th></tr>';
+    $('resultBody').innerHTML = '<tr><td colspan="2" class="tbl-empty">Menganalisis...</td></tr>';
+
+    fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: t })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        var rows = d.map(function(i){
+            return '<tr><td class="aspek-name">' + i.aspek + '</td><td>' + badge(i.sentimen) + '</td></tr>';
+        });
+        $('resultBody').innerHTML = rows.join('');
+        $('rowCount').textContent = '';
+        setBtn('btnText', false, BTN_TEXT_HTML);
+        smoothScroll('resultsCard');
+    })
+    .catch(function(err){
+        $('resultBody').innerHTML = '<tr><td colspan="2" class="tbl-empty tbl-err">Terjadi kesalahan: ' + err + '</td></tr>';
+        setBtn('btnText', false, BTN_TEXT_HTML);
+    });
+}
+
+/* ═══════════════════════════════════════
+   ANALYZE FILE
+═══════════════════════════════════════ */
+function analyzeFile(){
+    var f = $('fileInput').files[0];
+    if(!f){ alert("Pilih file terlebih dahulu!"); return; }
+
+    setBtn('btnFile', true, '');
+    $('resultsCard').style.display   = 'block';
+    $('visualSection').style.display = 'none';
+    $('statRow').style.display       = 'none';
+    $('filterCard').style.display    = 'none';
+    $('tableHead').innerHTML = '';
+    $('resultBody').innerHTML = '<tr><td colspan="8" class="tbl-empty"><div class="spinner-wrap"><div class="spinner"></div><span>Sedang menganalisis file, harap tunggu...</span></div></td></tr>';
+    $('pagination').style.display = 'none';
+    smoothScroll('resultsCard');
+
+    var fd = new FormData();
+    fd.append('file', f);
+
+    fetch('/predict_file', { method: 'POST', body: fd })
+    .then(function(r){
+        if(!r.ok){
+            return r.json().then(function(err){ throw new Error(err.error || 'Terjadi kesalahan'); });
+        }
+        return r.json();
+    })
+    .then(function(data){
+        allData = data;
+
+        // Reset filter ke Semua
+        currentAspek = 'semua';
+        var btns = document.querySelectorAll('.aspek-filter-btn');
+        for(var i = 0; i < btns.length; i++){ btns[i].classList.remove('active'); }
+        btns[0].classList.add('active');
+        setSubLabels('semua');
+
+        buildStats();
+        $('statRow').style.display    = 'grid';
+        $('filterCard').style.display = 'flex';
+        $('visualSection').style.display = 'flex';
+
+        updateCharts('semua');
+        generateWordClouds();
+
+        currentPage = 1;
+        renderTable();
+        setBtn('btnFile', false, BTN_FILE_HTML);
+        smoothScroll('statRow');
+    })
+    .catch(function(err){
+        $('resultBody').innerHTML = '<tr><td colspan="8" class="tbl-empty tbl-err">' + err.message + '</td></tr>';
+        setBtn('btnFile', false, BTN_FILE_HTML);
+    });
+}
+
+/* ═══════════════════════════════════════
+   GLOBAL FILTER
+═══════════════════════════════════════ */
+function applyFilter(btn, aspek){
+    currentAspek = aspek;
+    var btns = document.querySelectorAll('.aspek-filter-btn');
+    for(var i = 0; i < btns.length; i++){ btns[i].classList.remove('active'); }
+    btn.classList.add('active');
+    setSubLabels(aspek);
+    updateCharts(aspek);
+    generateWordClouds();
+}
+
+function setSubLabels(aspek){
+    $('chartSubLabel').textContent = (aspek === 'semua') ? 'keseluruhan' : aspek;
+    $('wcSubLabel').textContent    = (aspek === 'semua') ? 'semua aspek' : aspek;
+}
+
+/* ═══════════════════════════════════════
+   STAT ROW
+═══════════════════════════════════════ */
+function buildStats(){
+    var gP = 0, gN = 0, gT = 0;
+    for(var i = 0; i < allData.length; i++){
+        for(var j = 0; j < ASPEK.length; j++){
+            var v = allData[i][ASPEK[j]];
+            if(v === 'Positif') gP++;
+            else if(v === 'Negatif') gN++;
+            else gT++;
+        }
+    }
+    var tot = gP + gN + gT;
+    function pct(v){ return tot > 0 ? Math.round(v / tot * 100) : 0; }
+
+    function makeCard(icon, cls, val, pctVal, label){
+        return '<div class="stat-card">'
+            + '<div class="stat-icon ' + cls + '">' + icon + '</div>'
+            + '<div class="stat-body">'
+            + '<div class="stat-num">' + val + (pctVal !== '' ? '<span class="stat-pct ' + cls + '-text">' + pctVal + '%</span>' : '') + '</div>'
+            + '<div class="stat-lbl">' + label + '</div>'
+            + '</div></div>';
+    }
+
+    var ico1 = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+    var ico2 = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="20,6 9,17 4,12"/></svg>';
+    var ico3 = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    var ico4 = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+
+    $('statRow').innerHTML =
+        makeCard(ico1, 'si-blue',  allData.length, '',       'Total Ulasan')    +
+        makeCard(ico2, 'si-green', gP,             pct(gP),  'Sentimen Positif')+
+        makeCard(ico3, 'si-red',   gN,             pct(gN),  'Sentimen Negatif')+
+        makeCard(ico4, 'si-gray',  gT,             pct(gT),  'Tidak Terdeteksi');
+
+    $('rowCount').textContent = allData.length + ' baris';
+}
+
+/* ═══════════════════════════════════════
+   TABLE + PAGINATION
+═══════════════════════════════════════ */
+function renderTable(){
+    var start = (currentPage - 1) * rowsPerPage;
+    var rows  = allData.slice(start, start + rowsPerPage);
+    var tp    = Math.ceil(allData.length / rowsPerPage);
+
+    var headCols = '<th>Ulasan</th>';
+    for(var a = 0; a < ASPEK.length; a++){ headCols += '<th>' + ASPEK[a] + '</th>'; }
+    $('tableHead').innerHTML = '<tr>' + headCols + '</tr>';
+
+    var bodyRows = '';
+    for(var i = 0; i < rows.length; i++){
+        var r = rows[i];
+        var cols = '<td class="txt-col" title="' + r.teks_asli + '">' + r.teks_asli + '</td>';
+        for(var a = 0; a < ASPEK.length; a++){ cols += '<td>' + badge(r[ASPEK[a]]) + '</td>'; }
+        bodyRows += '<tr>' + cols + '</tr>';
+    }
+    $('resultBody').innerHTML = bodyRows;
+
+    $('pageInfo').textContent  = currentPage + ' / ' + tp;
+    $('prevPage').disabled     = (currentPage === 1);
+    $('nextPage').disabled     = (currentPage === tp);
+    $('pagination').style.display = 'flex';
+}
+
+function changePage(d){ currentPage += d; renderTable(); smoothScroll('resultsCard'); }
+
+/* ═══════════════════════════════════════
+   CHARTS — GROUPED BAR + DONUT
+═══════════════════════════════════════ */
+function updateCharts(selectedAspek){
+    if(myBar){ myBar.destroy(); myBar = null; }
+    if(myPie){ myPie.destroy(); myPie = null; }
+
+    var posData = [], negData = [];
+    var totalP  = 0,  totalN  = 0;
+
+    for(var a = 0; a < ASPEK.length; a++){
+        var p = 0, n = 0;
+        for(var i = 0; i < allData.length; i++){
+            var v = allData[i][ASPEK[a]];
+            if(v === 'Positif'){ p++; totalP++; }
+            else if(v === 'Negatif'){ n++; totalN++; }
+        }
+        posData.push(p);
+        negData.push(n);
+    }
+
+    var isAll = (selectedAspek === 'semua');
+
+    /* Warna: terang untuk aspek terpilih, redup untuk lainnya */
+    var posColors = [], negColors = [];
+    for(var a = 0; a < ASPEK.length; a++){
+        var highlight = isAll || (ASPEK[a] === selectedAspek);
+        posColors.push(highlight ? 'rgba(16,185,129,0.85)' : 'rgba(16,185,129,0.15)');
+        negColors.push(highlight ? 'rgba(239,68,68,0.85)'  : 'rgba(239,68,68,0.15)');
+    }
+
+    /* Data donut: keseluruhan atau per-aspek */
+    var donutP = totalP, donutN = totalN;
+    if(!isAll){
+        var idx = ASPEK.indexOf(selectedAspek);
+        if(idx >= 0){ donutP = posData[idx]; donutN = negData[idx]; }
+    }
+
+    var legendOpts = {
+        position: 'bottom',
+        labels: { font: { family: 'Plus Jakarta Sans', size: 11 }, padding: 14, usePointStyle: true }
+    };
+
+    /* Grouped bar chart */
+    myBar = new Chart($('barChart'), {
+        type: 'bar',
+        data: {
+            labels: ASPEK,
+            datasets: [
+                { label: 'Positif', data: posData, backgroundColor: posColors, borderRadius: 5, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.65 },
+                { label: 'Negatif', data: negData, backgroundColor: negColors, borderRadius: 5, borderSkipped: false, barPercentage: 0.8, categoryPercentage: 0.65 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: legendOpts,
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx){ return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y + ' ulasan'; }
+                    }
+                }
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { family: 'Plus Jakarta Sans', size: 10 } } },
+                y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { family: 'Plus Jakarta Sans', size: 10 }, stepSize: 1 } }
+            },
+            animation: { duration: 350 }
+        }
+    });
+
+    /* Donut chart */
+    myPie = new Chart($('pieChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Positif','Negatif'],
+            datasets: [{
+                data: [donutP, donutN],
+                backgroundColor: ['rgba(16,185,129,0.85)','rgba(239,68,68,0.85)'],
+                borderWidth: 0,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: legendOpts,
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx){
+                            var tot = donutP + donutN;
+                            var pct = tot > 0 ? Math.round(ctx.parsed / tot * 100) : 0;
+                            return ' ' + ctx.label + ': ' + ctx.parsed + ' (' + pct + '%)';
+                        }
+                    }
+                }
+            },
+            cutout: '62%',
+            animation: { duration: 350 }
+        }
+    });
+}
+
+/* ═══════════════════════════════════════
+   WORD CLOUDS — DUAL (POSITIF + NEGATIF)
+═══════════════════════════════════════ */
+function generateWordClouds(){
+    var POS_COLORS = ['#0d7a4e','#10b981','#059669','#047857','#065f46','#34d399'];
+    var NEG_COLORS = ['#00569c','#0082c8','#c0182a','#0070b8','#9f1239','#003d70'];
+    generateSingleCloud('wc-pos','wc-pos-loading','wc-pos-count','Positif', POS_COLORS);
+    generateSingleCloud('wc-neg','wc-neg-loading','wc-neg-count','Negatif', NEG_COLORS);
+}
+
+function generateSingleCloud(wrapperId, loadingId, countId, sentiment, colors){
+    var cont = $(wrapperId);
+
+    /* Hapus SVG lama */
+    var oldSvgs = cont.querySelectorAll('svg');
+    for(var s = 0; s < oldSvgs.length; s++){ oldSvgs[s].remove(); }
+
+    $(loadingId).style.display = 'block';
+    $(loadingId).textContent   = 'Memproses kata-kata...';
+
+    /* Kumpulkan teks sesuai filter */
+    var txt = '', count = 0;
+    for(var i = 0; i < allData.length; i++){
+        var r = allData[i];
+        var match = false;
+        if(currentAspek === 'semua'){
+            for(var a = 0; a < ASPEK.length; a++){
+                if(r[ASPEK[a]] === sentiment){ match = true; break; }
+            }
+        } else {
+            match = (r[currentAspek] === sentiment);
+        }
+        if(match){ txt += ' ' + r.teks_asli; count++; }
+    }
+
+    /* Update count badge */
+    $(countId).textContent = count + ' ulasan';
+
+    /* Hitung frekuensi kata */
+    var wordCounts = {};
+    var words = txt.toLowerCase().replace(/[^\w\s]/g,'').split(/\s+/);
+    for(var w = 0; w < words.length; w++){
+        var word = words[w];
+        if(word.length > 2 && !STOPS[word]){
+            wordCounts[word] = (wordCounts[word] || 0) + 1;
+        }
+    }
+
+    var entries = [];
+    for(var key in wordCounts){ entries.push({ text: key, size: wordCounts[key] }); }
+    entries.sort(function(a,b){ return b.size - a.size; });
+    entries = entries.slice(0, 40);
+
+    if(entries.length === 0){
+        $(loadingId).textContent = 'Tidak ada data untuk aspek ini.';
+        return;
+    }
+
+    var cw = cont.offsetWidth || 360;
+    var ch = 210;
+    var maxSize = 0;
+    for(var e = 0; e < entries.length; e++){ if(entries[e].size > maxSize) maxSize = entries[e].size; }
+    var scaleMin = 10, scaleMax = 44;
+
+    function scaleSize(s){ return maxSize > 0 ? scaleMin + (s / maxSize) * (scaleMax - scaleMin) : scaleMin; }
+
+    var wcEntries = entries.map(function(e){ return { text: e.text, size: scaleSize(e.size) }; });
+
+    d3.layout.cloud()
+        .size([cw, ch])
+        .words(wcEntries)
+        .padding(4)
+        .rotate(function(){ return Math.random() > 0.82 ? 90 : 0; })
+        .fontSize(function(d){ return d.size; })
+        .on('end', function(laid){
+            $(loadingId).style.display = 'none';
+            var svg = d3.select('#' + wrapperId).append('svg')
+                .attr('width', cw)
+                .attr('height', ch);
+            var g = svg.append('g').attr('transform', 'translate(' + (cw/2) + ',' + (ch/2) + ')');
+            g.selectAll('text')
+                .data(laid)
+                .enter().append('text')
+                .style('font-size', function(d){ return d.size + 'px'; })
+                .style('font-family', 'Plus Jakarta Sans, sans-serif')
+                .style('font-weight', function(d){ return d.size > 22 ? '700' : '600'; })
+                .style('fill', function(d, i){ return colors[i % colors.length]; })
+                .style('opacity', 0)
+                .attr('text-anchor', 'middle')
+                .attr('transform', function(d){ return 'translate(' + d.x + ',' + d.y + ')rotate(' + d.rotate + ')'; })
+                .text(function(d){ return d.text; })
+                .transition()
+                .duration(420)
+                .delay(function(d, i){ return i * 12; })
+                .style('opacity', 1);
+        })
+        .start();
+}
+
+/* ═══════════════════════════════════════
+   DOWNLOAD
+═══════════════════════════════════════ */
+function downloadExcel(){
+    var ws = XLSX.utils.json_to_sheet(allData);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Hasil');
+    XLSX.writeFile(wb, 'Hasil_Prediksi_MyBCA.xlsx');
+}
+</script>
+</body>
+</html>
