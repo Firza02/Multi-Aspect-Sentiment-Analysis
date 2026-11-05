@@ -1,0 +1,6 @@
+flask
+torch
+transformers
+pandas
+openpyxl
+huggingface_hub

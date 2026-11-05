@@ -1,8 +1,10 @@
+import os
 import torch
 import torch.nn as nn
 import pandas as pd
 from transformers import AutoTokenizer, AutoModel
 from flask import Flask, render_template, request, jsonify, Response
+from huggingface_hub import hf_hub_download
 import json
 
 app = Flask(__name__)
@@ -10,8 +12,12 @@ app = Flask(__name__)
 # --- KONFIGURASI MODEL ---
 MODEL_NAME = "indobenchmark/indobert-base-p2"
 DEVICE = torch.device("cpu")
-MODEL_PATH = "focal_model.pt"
+MODEL_PATH = "focal_model_quantized2.pt"
 BATCH_SIZE = 16  # sesuaikan: naikkan jika RAM cukup, turunkan jika crash
+
+# --- KONFIGURASI HUGGING FACE HUB (model di-download otomatis saat start) ---
+HF_REPO_ID = "firza02/focal-model"
+HF_FILENAME = "focal_model_quantized2.pt"
 
 ASPECT_NAMES = ["Effectiveness", "Efficiency", "Learnability", "Errors", "Satisfaction", "Cognitive Load"]
 LABEL_MAP = {0: "Negatif", 1: "Positif", 2: "Aspek Tidak Disebut"}
@@ -30,9 +36,22 @@ class IndoBERTMultiAspek(nn.Module):
         pooled = self.dropout(outputs.pooler_output)
         return [clf(pooled) for clf in self.classifiers]
 
+if not os.path.exists(MODEL_PATH):
+    print(f"Model '{MODEL_PATH}' tidak ditemukan secara lokal, mengunduh dari Hugging Face Hub...")
+    downloaded_path = hf_hub_download(repo_id=HF_REPO_ID, filename=HF_FILENAME)
+    MODEL_PATH = downloaded_path
+    print(f"Model berhasil diunduh ke: {MODEL_PATH}")
+
 print("Memuat model... Harap tunggu.")
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = IndoBERTMultiAspek(MODEL_NAME, num_aspects=6, num_classes=3)
+
+qconfig_spec = {
+    nn.Linear: torch.quantization.default_dynamic_qconfig,
+    nn.Embedding: torch.quantization.float_qparams_weight_only_qconfig,
+}
+model = torch.quantization.quantize_dynamic(model, qconfig_spec, dtype=torch.qint8)
+
 model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
 model.eval()
 print("Sistem Siap!")
